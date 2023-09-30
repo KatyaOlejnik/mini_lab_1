@@ -6,6 +6,8 @@ import numpy as np
 
 from functools import partial
 from tkinter import *
+from tkinter import filedialog
+
 from tkinter.filedialog import asksaveasfile
 
 from matplotlib import pyplot as plt
@@ -21,6 +23,7 @@ class Entries:
     def __init__(self):
         self.entries_list = []
         self.parent_window = None
+        self.active_entry = None
 
     def set_parent_window(self, parent_window):
         self.parent_window = parent_window
@@ -36,6 +39,17 @@ class Entries:
             plot_button.pack_forget()
         self.parent_window.add_button('plot', 'Plot', 'plot', hot_key='<Return>')
         self.entries_list.append(new_entry)
+
+    def delete_entry(self):
+        self.entries_list.remove(self.active_entry)
+        self.active_entry.destroy()
+        self.active_entry = None
+        self.parent_window.commands.plot()
+
+    def clear_entries_list(self):
+        for entry in self.entries_list:
+            entry.destroy()
+        self.entries_list.clear()
 
 
 # class for plotting (класс для построения графиков)
@@ -133,6 +147,12 @@ class Commands:
                                                                                           'строку. С этим ничего '
                                                                                           'делать не нужно. '
                                                                                           'Просто нажми OK :)')
+                    mw = ModalWindow(self, self.parent_window, title='Пустая строка', labeltext='Это пример модального окна, '
+                                                                                                'возникающий, если ты ввел '
+                                                                                                'пустую '
+                                                                                                'строку. С этим ничего '
+                                                                                                'делать не нужно. '
+                                                                                                'Просто нажми OK :)')
                     ok_button = Button(master=mw.top, text='OK', command=mw.cancel)
                     mw.add_button(ok_button)
                     self.__empty_entry_counter = 1
@@ -155,6 +175,30 @@ class Commands:
 
     def save_as(self):
         self._state.save_state()
+        return self
+
+    def delete_func(self, *args, **kwargs):
+        self.parent_window.entries.active_entry = self.parent_window.focus_get()
+        if self.parent_window.entries.active_entry.get() != "":
+            mw = ModalWindow(self, self.parent_window, title='Подтвердите удаление', labeltext='Вы уверены, '
+                                                                                               'что хотите удалить данное текстовое поле?')
+            cancel_button = Button(master=mw.top, text='Да', command=mw.delete)
+            ok_button = Button(master=mw.top, text='Нет', command=mw.cancel)
+            mw.add_button(ok_button)
+            mw.add_button(cancel_button)
+        else:
+            self.parent_window.entries.delete_entry()
+        return self
+
+    def download(self):
+        self.parent_window.entries.clear_entries_list()
+        file_in = filedialog.askopenfile(defaultextension=".json")
+        if file_in is not None:
+            funcs = json.load(file_in)
+            for function in funcs['list_of_function']:
+                self.parent_window.entries.add_entry()
+                self.parent_window.entries.entries_list[-1].insert(0, function)
+            self.parent_window.commands.plot()
         return self
 
 
@@ -180,7 +224,8 @@ class Buttons:
 
 # class for generate modal windows (класс для генерации модальных окон)
 class ModalWindow:
-    def __init__(self, parent, title, labeltext=''):
+    def __init__(self, window, parent, title, labeltext=''):
+        self.window = window
         self.buttons = []
         self.top = Toplevel(parent)
         self.top.transient(parent)
@@ -198,6 +243,9 @@ class ModalWindow:
     def cancel(self):
         self.top.destroy()
 
+    def delete(self):
+        self.window.parent_window.entries.delete_entry()
+        self.top.destroy()
 
 # app class (класс приложения)
 class App(Tk):
@@ -231,6 +279,7 @@ class App(Tk):
 
         file_menu = Menu(menu)
         file_menu.add_command(label="Save as...", command=self.commands.get_command_by_name('save_as'))
+        file_menu.add_command(label="Download", command=self.commands.get_command_by_name('download'))
         menu.add_cascade(label="File", menu=file_menu)
 
 
@@ -248,10 +297,13 @@ if __name__ == "__main__":
     commands_main.add_command('plot', commands_main.plot)
     commands_main.add_command('add_func', commands_main.add_func)
     commands_main.add_command('save_as', commands_main.save_as)
+    commands_main.add_command('delete_func', commands_main.delete_func)
+    commands_main.add_command('download', commands_main.download)
     # init app (создаем экземпляр приложения)
     app = App(buttons_main, plotter_main, commands_main, entries_main)
     # init add func button (добавляем кнопку добавления новой функции)
     app.add_button('add_func', 'Добавить функцию', 'add_func', hot_key='<Control-a>')
+    app.add_button('delete_func', 'Удалить функцию', 'delete_func', hot_key='<Control-d>')
     # init first entry (создаем первое поле ввода)
     entries_main.add_entry()
     app.create_menu()
